@@ -107,6 +107,22 @@ def test_enforce_passes_through_non_tool_decisions():
     assert e.action == "complete" and e.next_state == AgentState.COMPLETED_INFO
 
 
+@pytest.mark.parametrize("bad", [
+    PlannerDecision(action="send_message", tool=None),   # out-of-contract action
+    PlannerDecision(action="call_tool", tool=None),      # call_tool without a tool
+])
+def test_malformed_planner_decision_hands_off(bad):
+    """A malformed decision (e.g. from the LLM planner) must hand off, not crash.
+
+    The non-strict planner schema lets the LLM emit an action outside the enum or a
+    call_tool with a null tool; the deterministic loop must dispose of it safely.
+    """
+    session = _session()
+    advance(session, user_reply("ok"), AgentTools(), SETTINGS, planner=StubPlanner([bad]))
+    assert session.state == AgentState.HANDOFF_HUMAN
+    assert _tools(session.actions) == ["escalate_to_human"]
+
+
 # --- human-approval gate (planner-driven) -----------------------------------
 
 
@@ -195,15 +211,6 @@ def test_complete_without_terminal_state_hands_off():
     stub = StubPlanner([PlannerDecision(action="complete")])
     advance(session, user_reply("x"), AgentTools(), SETTINGS, planner=stub)
     assert session.state == AgentState.HANDOFF_HUMAN
-
-
-def test_nurture_goal_sends_asset_and_closes():
-    # A cold-complete lead's thin nurturing trajectory: one automatic asset
-    # (consent-gated), then the terminal NURTURED state -- no operator call.
-    session = _session(goal=AgentGoal.NURTURE, state=AgentState.TRIGGERED)
-    advance(session, _start(), AgentTools(), SETTINGS)
-    assert "send_asset" in _tools(session.actions)
-    assert session.state == AgentState.NURTURED
 
 
 def test_capture_consent_before_handoff():

@@ -139,15 +139,17 @@ class LLMAdapter:
         return features
 
     def complete_json(
-        self, system: str, messages: list[dict], schema: dict
+        self, system: str, messages: list[dict], schema: dict, model: str | None = None
     ) -> dict[str, Any]:
         """Reusable structured-output call returning a schema-validated JSON object.
 
-        Used by the agent's LLM planner (off the hot path). Mock-first like
-        :meth:`extract`: with no live OpenAI backend it raises :class:`LLMError`
-        so the caller degrades deterministically (there is no offline "planner
-        mock" -- in mock mode the deterministic planner is used directly). Shares
-        the same circuit breaker as extraction.
+        Used by the agent's LLM planner (off the hot path). ``model`` selects the
+        deployment and defaults to the extraction model; the agent passes its own
+        ``openai_agent_model`` so the two calls can run on different tiers.
+        Mock-first like :meth:`extract`: with no live OpenAI backend it raises
+        :class:`LLMError` so the caller degrades deterministically (there is no
+        offline "planner mock" -- in mock mode the deterministic planner is used
+        directly). Shares the same circuit breaker as extraction.
         """
         if not self._openai_active():
             raise LLMError("complete_json has no offline backend (use mock planner).")
@@ -155,7 +157,7 @@ class LLMAdapter:
         try:  # pragma: no cover - requires live OpenAI
             full_messages = [{"role": "system", "content": system}, *messages]
             response = self._client.chat.completions.create(  # type: ignore[union-attr]
-                model=self._settings.openai_model,
+                model=model or self._settings.openai_model,
                 messages=full_messages,
                 temperature=0,
                 timeout=self._settings.llm_timeout_s,

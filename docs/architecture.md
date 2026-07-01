@@ -167,9 +167,9 @@ motivazione e CLI.
   (NON incluso: training fuori scope); altrimenti i **pesi naive**
   [config/score_weights_naive.json](../config/score_weights_naive.json) (fallback
   attivo, sommano a 100). Ritorna `(weights, source)`.
-- `load_thresholds`: bande da
+- `load_thresholds`: bande + cutoff di automazione da
   [config/category_thresholds.json](../config/category_thresholds.json)
-  (hot 65 / warm 40 / cold 20).
+  (hot 72 / warm 45 / cold 25; `warm_high` 62; `recovery_coverage_min` 0.45).
 - `load_catchment`, `load_blocklists`: catchment geo e blocklist del gate.
 
 Tutti degradano a default built-in se un file manca/e illeggibile.
@@ -191,14 +191,17 @@ dall'LLM. Le soglie sono lette dall'artifact, mai hardcoded a intuito.
 - **Azione** ([src/action/decision.py](../src/action/decision.py)):
   `decide_action(...)` -> `ActionDecision(recommended_action, agent_goal, priority)`.
   Routing **allineato al valore + consenso** (`route_complete`, sorgente unica riusata
-  anche dal re-scoring dell'agente): `invalid` -> `scartare`; **incompleto** (qualsiasi
-  banda) + consenso -> `chiedere_info` + goal `recover_info`; **completo**
-  automation-worthy (`hot` o `warm` con `score >= warm_high`) + consenso -> `lead_valido`
-  + goal `negotiate_appointment` (booking proattivo); **completo** `cold` + consenso ->
-  `nurturing` + goal `nurturing` (un asset, nessuna chiamata); senza consenso o warm
-  medio/basso -> operatore. Il **consenso e valutato a monte** (niente trigger che
-  collassa in handoff). `priority` (0-100) e la banda della categoria + boost in-banda da
-  score e cliente di ritorno -> ordine della coda call center.
+  anche dal re-scoring dell'agente): automazione ristretta ai lead ad alto valore
+  (`hot` e `warm >= warm_high`). `invalid` -> `scartare`; **incompleto** + consenso **e**
+  estrazione abbastanza ricca (`recovery_worthy`: `extraction_coverage >=
+  recovery_coverage_min`, non la banda depressa dai campi mancanti) -> `chiedere_info` +
+  goal `recover_info`; **completo** automation-worthy (`hot` o `warm` con `score >=
+  warm_high`) + consenso -> `lead_valido` + goal `negotiate_appointment` (booking
+  proattivo); **`cold`** (qualsiasi completezza), warm medio/basso, o senza consenso ->
+  operatore (i `cold` con label `nurturing` a bassa priorita, **mai** agente). Il
+  **consenso e valutato a monte** (niente trigger che collassa in handoff). `priority`
+  (0-100) e la banda della categoria + boost in-banda da score e cliente di ritorno ->
+  ordine della coda call center.
 
 ## 9. Zona 2 — Lead-Resolution Agent ([src/agent/](../src/agent/))
 
@@ -219,7 +222,7 @@ trigger, e il runner avanza una sessione persistita sugli eventi.
   planner una decisione, la passa da `enforce()`, esegue il tool, registra audit e
   transita — fino a wait/terminale/stage. Stati: `TRIGGERED`, `AWAITING_USER_REPLY`,
   `EVALUATING_REPLY`, `PROPOSING_SLOT`, `AWAITING_CONFIRMATION`, il non-terminale
-  `PENDING_APPROVAL`, terminali `BOOKED`, `COMPLETED_INFO`, `NURTURED`, `HANDOFF_HUMAN`,
+  `PENDING_APPROVAL`, terminali `BOOKED`, `COMPLETED_INFO`, `HANDOFF_HUMAN`,
   `DISQUALIFIED_NO_RESPONSE`, `TERMINATED`. Recupero info e negoziazione sono **la
   stessa macchina** su traiettorie diverse.
 - **Re-scoring async dopo recupero info** (`planner._eval_recover` + `_rescore`): alla
@@ -228,9 +231,9 @@ trigger, e il runner avanza una sessione persistita sugli eventi.
   **stessa** `build_feature_vector`/`semantic_values` sul vettore strutturale cachato nella
   sessione (`base_features`/`base_vector`) — **nessuno skew, nessuna call LLM extra**. Poi
   ri-instrada con la stessa `route_complete`: lead promosso a booking-worthy → prosegue al
-  booking nello stesso wake; warm medio → operatore (`COMPLETED_INFO`); ancora incompleto →
-  continua a chiedere (bounded) o consegna all'operatore. Un `cold` completo-ma-debole →
-  traiettoria thin `nurturing` (un `send_asset`, poi `NURTURED`). Tutto **fuori SLA**.
+  booking nello stesso wake; `warm` medio o `cold` → operatore (`COMPLETED_INFO`); ancora
+  incompleto → continua a chiedere (bounded) o consegna all'operatore. Nessun `cold` viene
+  automatizzato (§7.1). Tutto **fuori SLA**.
 - **Gate di approvazione del booking**: `book_appointment` è `human_approval`.
   `enforce()` lo **mette in stage** (`session.pending_action`), lo registra
   `pending_approval` e la sessione si ferma in `PENDING_APPROVAL`; un evento

@@ -114,7 +114,12 @@ def advance(
             session.state = AgentState.PENDING_APPROVAL
             return session
 
-        # call_tool
+        # call_tool: only a well-formed tool call reaches execution. Any other
+        # enforced action (an out-of-contract planner ``action``, or a call_tool
+        # without a tool -- possible from the LLM planner) hands off safely rather
+        # than invoking ``None`` and crashing the audit trail.
+        if enforced.action != "call_tool" or not enforced.tool:
+            return _handoff(session, tools, f"malformed_decision:{enforced.action}")
         res = _safe(session, tools, enforced.tool,
                     lambda: _invoke_tool(session, tools, enforced.tool, enforced.args))
         if res is None:

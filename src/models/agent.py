@@ -33,7 +33,6 @@ class AgentState(str, Enum):
     # Terminal states
     BOOKED = "BOOKED"
     COMPLETED_INFO = "COMPLETED_INFO"
-    NURTURED = "NURTURED"  # a cold lead got an automatic nurturing asset (no call)
     HANDOFF_HUMAN = "HANDOFF_HUMAN"
     DISQUALIFIED_NO_RESPONSE = "DISQUALIFIED_NO_RESPONSE"
     TERMINATED = "TERMINATED"
@@ -44,7 +43,6 @@ TERMINAL_STATES = frozenset(
     {
         AgentState.BOOKED,
         AgentState.COMPLETED_INFO,
-        AgentState.NURTURED,
         AgentState.HANDOFF_HUMAN,
         AgentState.DISQUALIFIED_NO_RESPONSE,
         AgentState.TERMINATED,
@@ -53,11 +51,16 @@ TERMINAL_STATES = frozenset(
 
 
 class AgentGoal(str, Enum):
-    """Why the agent was triggered: drives the initial trajectory."""
+    """Why the agent was triggered: drives the initial trajectory.
+
+    Automation is restricted to high-value leads (§7.1): recover missing info
+    from a rich-enough incomplete lead, or negotiate a booking for a hot /
+    warm>=warm_high lead. Cold leads are never automated -- they go to the
+    operator.
+    """
 
     RECOVER_INFO = "recover_info"
     NEGOTIATE_APPOINTMENT = "negotiate_appointment"
-    NURTURE = "nurturing"  # thin: send one automatic asset to a cold lead, then close
 
 
 class AgentEventType(str, Enum):
@@ -115,7 +118,7 @@ class AgentSession(BaseModel):
     # Score recomputed off the SLA after a recovery reply (§7.2). Persisted so the
     # operator-facing view (``finalize_with_session``) can realign category /
     # action / priority to the enriched lead once the session resolves. None until
-    # the agent re-scores (negotiate / nurture goals never recompute it).
+    # the agent re-scores (the negotiate goal never recomputes it).
     final_score: int | None = None
 
     # Cached at trigger time so the agent can RE-SCORE off the SLA once it

@@ -142,15 +142,6 @@ def test_finalize_handoff_reemerges_to_operator():
     assert "riprendi" in out.next_best_action.lower()
 
 
-def test_finalize_nurtured_stays_with_agent():
-    out = finalize_with_session(
-        _scored(category="cold", score=25),
-        _session(AgentState.NURTURED, goal=AgentGoal.NURTURE),
-    )
-    assert out.queue == QUEUE_AGENT
-    assert out.recommended_action == "nurturing"
-
-
 def test_finalize_in_flight_keeps_agent_ownership():
     scored = _scored(category="warm", score=45, recommended_action="chiedere_info")
     out = finalize_with_session(scored, _session(AgentState.AWAITING_USER_REPLY))

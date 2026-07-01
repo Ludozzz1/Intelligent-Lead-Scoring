@@ -25,7 +25,6 @@ from __future__ import annotations
 
 from src.action.decision import (
     ACTION_ASK_INFO,
-    ACTION_NURTURE,
     ACTION_VALID,
     _compute_priority,
 )
@@ -62,7 +61,6 @@ _CATEGORY_PREFIX = {
 _AGENT_GOAL_PENDING = {
     "recover_info": "In gestione dall'agente: recupero info mancanti — non chiamare.",
     "negotiate_appointment": "In gestione dall'agente: proposta appuntamento — non chiamare.",
-    "nurturing": "Nurturing automatico in corso — nessuna chiamata.",
 }
 _AGENT_GOAL_PENDING_DEFAULT = "In gestione dall'agente — non chiamare."
 
@@ -153,7 +151,6 @@ _AGENT_STATUS_LABELS = {
     AgentState.PENDING_APPROVAL: "Prenotazione in attesa di approvazione operatore",
     AgentState.BOOKED: "Appuntamento prenotato",
     AgentState.COMPLETED_INFO: "Info recuperate dall'agente",
-    AgentState.NURTURED: "Nurturing completato",
     AgentState.HANDOFF_HUMAN: "Handoff a operatore umano",
     AgentState.DISQUALIFIED_NO_RESPONSE: "Nessuna risposta dal cliente",
     AgentState.TERMINATED: "Sessione agente chiusa",
@@ -167,7 +164,7 @@ def agent_status_label(state: AgentState) -> str:
 
 # (queue, recommended_action, next_best_action) per terminal / staged state.
 # Leads that need a human re-emerge in the ``attiva`` queue with takeover context;
-# ``BOOKED`` / ``NURTURED`` close in ``agente`` (no operator call).
+# ``BOOKED`` closes in ``agente`` (no operator call).
 _CLOSURE = {
     AgentState.BOOKED: (
         QUEUE_AGENT, ACTION_VALID,
@@ -180,10 +177,6 @@ _CLOSURE = {
     AgentState.COMPLETED_INFO: (
         QUEUE_ACTIVE, ACTION_VALID,
         "Info recuperate dall'agente — chiama, lead qualificato.",
-    ),
-    AgentState.NURTURED: (
-        QUEUE_AGENT, ACTION_NURTURE,
-        "Nurturing automatico inviato — nessuna chiamata.",
     ),
     AgentState.HANDOFF_HUMAN: (
         QUEUE_ACTIVE, ACTION_VALID,

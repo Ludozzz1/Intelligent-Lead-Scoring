@@ -86,6 +86,14 @@ class Pipeline:
     def settings(self) -> Settings:
         return self._settings
 
+    def reset_cache(self) -> None:
+        """Drop the per-lead idempotency cache (re-score the same lead_id fresh).
+
+        The cache keys on ``lead_id`` only, so a tool re-submitting the same lead
+        with a changed field (e.g. consent) would otherwise get the stale result.
+        """
+        self._processed.clear()
+
     # -- core flow -----------------------------------------------------------
 
     def _score_uncached(
@@ -119,7 +127,7 @@ class Pipeline:
 
         action = decide_action(
             category, validity, features, final_score, personalization,
-            consent=lead.consent, settings=self._settings,
+            consent=lead.consent, settings=self._settings, vector=vector,
         )
         motivation = build_motivation(category, validity, features, score_result)
 

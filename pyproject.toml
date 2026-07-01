@@ -21,6 +21,7 @@ dependencies = [
 dev = ["pytest", "pytest-asyncio", "httpx"]
 llm = ["openai"]
 cli = ["rich"]
+ui = ["streamlit"]
 
 [tool.setuptools.packages.find]
 where = ["."]

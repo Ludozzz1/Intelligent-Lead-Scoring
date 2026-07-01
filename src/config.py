@@ -32,7 +32,11 @@ class Settings(BaseSettings):
     # --- LLM adapter (mock-first; real provider only with key + llm_mode) ---
     llm_mode: str = "mock"
     openai_api_key: str | None = None
-    openai_model: str = "gpt-4o-mini"
+    # Two independent deployments (env: OPENAI_MODEL / OPENAI_AGENT_MODEL):
+    #  - openai_model: the hot-path extraction call (Task 1, latency-bound).
+    #  - openai_agent_model: the off-SLA agentic planner (Task 2, quality-bound).
+    openai_model: str = "gpt-5.4-mini"
+    openai_agent_model: str = "gpt-5.4"
     # Hard timeout for the single hot-path LLM call; on breach -> deterministic
     # fallback so the 2-minute SLA never depends on the LLM (§8).
     llm_timeout_s: float = 8.0

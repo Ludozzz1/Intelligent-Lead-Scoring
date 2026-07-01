@@ -146,8 +146,6 @@ class DeterministicPlanner:
         if state == AgentState.TRIGGERED:
             if session.goal == AgentGoal.RECOVER_INFO:
                 return self._recover_kickoff(session, done)
-            if session.goal == AgentGoal.NURTURE:
-                return self._nurture_kickoff(session, done)
             return self._negotiate_kickoff(session, done)
 
         if state == AgentState.PROPOSING_SLOT:
@@ -195,17 +193,6 @@ class DeterministicPlanner:
         return PlannerDecision(action="wait_user",
                                next_state=AgentState.AWAITING_USER_REPLY)
 
-    def _nurture_kickoff(self, session: AgentSession, done: set) -> PlannerDecision:
-        """Thin cold-lead nurturing: one automatic asset, then close (no call)."""
-        if "send_asset" not in done:
-            return _call("send_asset",
-                         args={"asset_type": "vehicle_sheet",
-                               "vehicle": session.vehicle_interest},
-                         rationale="nurturing automatico (lead cold)")
-        return PlannerDecision(action="complete",
-                               next_state=AgentState.NURTURED,
-                               reason="nurtured")
-
     def _negotiate_kickoff(self, session: AgentSession, done: set) -> PlannerDecision:
         if "check_inventory" not in done:
             return _call("check_inventory", args={"vehicle": session.vehicle_interest},
@@ -242,9 +229,10 @@ class DeterministicPlanner:
 
         Enrichment can lift the lead to a better band: if it is now complete and
         booking-worthy the agent restarts the negotiation trajectory in-wake; if
-        still cold it nurtures; if still incomplete it keeps chasing (bounded by
-        the message budget) or hands the enriched lead to a human. It never marks
-        a lead invalid -- "still weak" is not "fake".
+        still cold or mid/low warm it hands the enriched lead to the operator
+        (COMPLETED_INFO); if still incomplete it keeps chasing (bounded by the
+        message budget) or hands off. It never marks a lead invalid -- "still
+        weak" is not "fake".
         """
         text = (event.text or "").lower() if event else ""
         if any(w in text for w in _REFUSAL_WORDS):
@@ -287,10 +275,8 @@ class DeterministicPlanner:
             session.goal = AgentGoal.NEGOTIATE_APPOINTMENT
             session.state = AgentState.TRIGGERED
             return self._negotiate_kickoff(session, done)
-        if goal == AgentGoal.NURTURE:
-            session.goal = AgentGoal.NURTURE
-            session.state = AgentState.TRIGGERED
-            return self._nurture_kickoff(session, done)
+        # Cold or mid/low warm after enrichment -> not automation-worthy: hand the
+        # enriched lead to the operator (never nurture, never invalid).
         return PlannerDecision(action="complete",
                                next_state=AgentState.COMPLETED_INFO,
                                reason="info_completed")
@@ -347,7 +333,8 @@ class LLMPlanner:
     ) -> PlannerDecision:
         messages = build_planner_messages(session, event, wake)
         data = self._adapter.complete_json(
-            PLANNER_SYSTEM_PROMPT, messages, PLANNER_DECISION_SCHEMA
+            PLANNER_SYSTEM_PROMPT, messages, PLANNER_DECISION_SCHEMA,
+            model=settings.openai_agent_model,
         )
         try:
             return PlannerDecision(**data)

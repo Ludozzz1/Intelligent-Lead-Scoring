@@ -20,9 +20,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from src.config import Settings
 from src.models.features import FeatureVector
 from src.models.lead import ExtractedFeatures, Lead
-from src.scoring.weights import load_catchment
+from src.scoring.weights import load_catchment, load_weights
 
 # Recency horizon: a lead this many days old scores 0 on recency (older = less
 # operationally valuable, §5.3). Linear decay from 1.0 at age 0.
@@ -81,6 +82,38 @@ def build_feature_vector(
         "geo_match": _geo_match(lead),
     }
     return FeatureVector(values=values, semantic_features=list(_SEMANTIC_FEATURES))
+
+
+# Signal features whose presence reflects the extraction's RICHNESS. ``recency``
+# is deliberately excluded: it is a time-decay, not an "was this dimension
+# extracted" signal, and would inflate coverage for every fresh lead regardless
+# of how much was actually understood.
+_COVERAGE_SIGNAL_FEATURES = _SEMANTIC_FEATURES + ("reachability", "geo_match")
+
+
+def extraction_coverage(
+    vector: FeatureVector, settings: Settings | None = None
+) -> float:
+    """Weighted fraction of the §5.3 signal dimensions actually extracted, [0, 1].
+
+    Reuses the SAME naive scorer weights so coverage tracks how much
+    scoring-relevant signal is genuinely present (a missing budget weighs more
+    than a missing sentiment) and auto-recalibrates if learned weights land.
+    Gates ``recovery_worthy`` (src/action/decision.py, §7.1): an incomplete
+    lead's score band is unreliable -- depressed by the very fields that are
+    missing -- so coverage, not the band, decides whether the agent attempts
+    info-recovery.
+    """
+    weights, _ = load_weights(settings)
+    total = 0.0
+    got = 0.0
+    for feature in _COVERAGE_SIGNAL_FEATURES:
+        weight = weights.get(feature, 0.0)
+        total += weight
+        got += weight * vector.values.get(feature, 0.0)
+    if total <= 0:
+        return 0.0
+    return max(0.0, min(1.0, got / total))
 
 
 def _stronger(reply_val: str, base_val: str, rank: dict[str, int]) -> str:

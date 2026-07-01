@@ -100,17 +100,19 @@ lead **non entra nella coda attiva**. Due fonti, allineate al valore + consenso
 - **invalid → `queue="scartato"`**: **fuori dalla coda di chiamata** (0 chiamate). Non
   più un consiglio "scartare" su un lead che resta in lista: è una **disposizione di
   sistema**, con motivazione conservata solo per audit/appello.
-- **auto-gestiti dall'agente → `queue="agente"`**: hot e warm-alti con consenso chiusi
-  con `BOOKED`; cold completi con consenso chiusi con `NURTURED` (un `send_asset`
-  consent-gated). Nessuna chiamata operatore. I **cold/incompleti** passano prima dal
-  `recover_info`: l'arricchimento (re-scoring §7.2) può promuoverli di banda.
+- **auto-gestiti dall'agente → `queue="agente"`**: solo lead ad alto valore — `hot` e
+  `warm` al limite dell'hot (`score ≥ warm_high`) con consenso, chiusi con `BOOKED`
+  (booking staged + approvazione umana). Gli **incompleti** con estrazione ricca
+  (`recovery_worthy`) passano prima dal `recover_info`: l'arricchimento (re-scoring §7.2)
+  può promuoverli a booking-worthy. I **`cold` non entrano mai in automazione** (§7.1).
 - **tutto il resto → `queue="attiva"`**: senza consenso (l'agente non può messaggiare),
   warm medi/bassi, e i lead che l'agente **ri-emerge** dopo handoff / approvazione /
   nessuna risposta. Restano in coda **ma priorizzati**, con un `next_best_action`.
 
-Sul **dataset demo (26 lead, consent-rich)** le chiamate evitate sono **5 scartati + 18
-auto-gestiti = 23/26 (~88%)**. È un limite superiore: a regime l'evitato dipende dalla
-**quota invalid** e dal **tasso di consenso** (senza consenso il lead torna all'operatore).
+Sul **dataset demo (26 lead, consent-rich)** le chiamate evitate sono **5 scartati + 15
+auto-gestiti = 20/26 (~77%)**. È un limite superiore: a regime l'evitato dipende dalla
+**quota invalid**, dal **tasso di consenso** e dalla **quota hot/warm-alti** (i `cold` e i
+warm medi restano coda operatore).
 
 Assumendo, in modo prudenziale, **~30-40%** di chiamate evitabili a regime (invalid +
 auto-gestiti con consenso):
@@ -128,10 +130,10 @@ Con il range 30-40%:
 40% -> 4.000 chiamate -> 16.000 EUR/g -> ~480.000 EUR/mese
 ```
 
-**Risparmio stimato: ~360.000-480.000 EUR/mese** (al netto del nurturing, che sposta
-i cold da "chiamata 4 EUR" a "messaggio a costo marginale"). A questo si aggiunge un
-effetto qualitativo: la priorizzazione concentra il tempo operatore sui lead buoni
-(non quantificato qui, prudenziale).
+**Risparmio stimato: ~360.000-480.000 EUR/mese** (i risparmi vengono da invalid scartati
+e da hot/warm-alti auto-gestiti; i `cold` ora restano coda operatore, priorizzati in
+basso). A questo si aggiunge un effetto qualitativo: la priorizzazione concentra il tempo
+operatore sui lead buoni (non quantificato qui, prudenziale).
 
 ## 4. ROI e break-even
 
@@ -147,8 +149,8 @@ effetto qualitativo: la priorizzazione concentra il tempo operatore sui lead buo
 di chiamate *al giorno*. Si ripaga in **meno di 2 ore** di operativita al primo
 giorno. Il ROI e schiacciante: e la slide d'apertura.
 
-> Assunzioni da raffinare con lo storico: quota effettiva invalid+cold, costo reale
-> del nurturing, uplift di conversione dalla priorizzazione.
+> Assunzioni da raffinare con lo storico: quota effettiva invalid, tasso di consenso,
+> quota hot/warm-alti auto-gestibili, uplift di conversione dalla priorizzazione.
 
 ## 5. Analisi SLA e latenza
 

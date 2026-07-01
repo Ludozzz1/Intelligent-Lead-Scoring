@@ -42,10 +42,11 @@ lead → [gate] → [extraction: UNICA call LLM] → [scoring lineare] → [cate
   `rationale_signals` + contributi. **Nessuna seconda call LLM.**
 
 **Zona 2 — Agente** ([src/agent/](src/agent/)): un singolo **Lead-Resolution Agent**
-event-driven, **fuori dallo SLA**. Trigger **allineato al valore + consenso**: lead
-incompleto → `recover_info` (poi **ri-score** la risposta e ri-instrada); `hot`/warm-alto
-completo → `negotiate_appointment` (booking proattivo); `cold` completo → `nurturing`
-(un asset, nessuna chiamata); senza consenso → operatore. Il loop è guidato da un **planner** — deterministico in mock
+event-driven, **fuori dallo SLA**. Automazione **ristretta ai lead ad alto valore**
+(`hot` e `warm ≥ warm_high`): completo → `negotiate_appointment` (booking proattivo);
+incompleto **con estrazione ricca** (`recovery_worthy`: copertura ≥ `recovery_coverage_min`,
+non la banda) → `recover_info` (poi **ri-score** e ri-instrada); `cold`, warm medio o senza
+consenso → operatore (i `cold` **mai** in automazione). Il loop è guidato da un **planner** — deterministico in mock
 (default, comportamento riproducibile, zero token) o **LLM** off-SLA con degrade —
 ma ogni azione passa da `enforce()` (**"l'LLM propone, il deterministico dispone"**):
 tool mockati, guardrail e diritti di decisione (vedi
@@ -97,6 +98,24 @@ dell'agente** con repliche simulate fino agli stati terminali
 .venv/Scripts/python cli.py --detail LEAD-0001 # explainability + contributi + traiettoria agente
 .venv/Scripts/python cli.py --pending          # azioni in attesa di approvazione umana
 ```
+
+## Frontend Streamlit (review UI)
+
+Interfaccia web minimale che **riproduce la chiamata del monolite** al servizio:
+carica un lead (campione o file JSON), esegue lo scoring in-process e — se il lead
+attiva l'agente — ne mostra la **traiettoria** con repliche del lead **simulate**,
+rendendo visibili tutti i passaggi e le decisioni di entrambe le zone.
+
+```bash
+.venv/Scripts/python -m pip install -e ".[ui]"   # aggiunge streamlit
+.venv/Scripts/python -m streamlit run streamlit_app.py
+```
+
+- **Accesso a password**: default demo `autoxy-demo`, sovrascrivibile con la env var
+  `APP_PASSWORD` (nessun segreto committato).
+- **Consenso**: i lead reali non includono `consent`; la UI lo imposta
+  automaticamente a ON, con un toggle per testare anche il ramo senza consenso
+  (l'agente non parte → gestione operatore).
 
 ## API REST
 

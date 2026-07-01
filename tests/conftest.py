@@ -8,9 +8,16 @@ reference time so the ``recency`` feature is stable.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+# Pin mock mode BEFORE any test module builds its Settings: the suite must stay
+# deterministic and key-free even when a developer's local .env sets
+# LLM_MODE=openai (env vars take precedence over .env in pydantic-settings).
+os.environ["LLM_MODE"] = "mock"
+os.environ["OPENAI_API_KEY"] = ""
 
 import pytest
 

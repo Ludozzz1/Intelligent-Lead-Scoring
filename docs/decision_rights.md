@@ -36,8 +36,9 @@ deterministico in `llm_mode=mock` (default), LLM-driven altrove. Vale l'invarian
   → `HANDOFF_HUMAN`).
 - **Re-scoring async non-disqualificante** (§7.2): dopo un `recover_info` l'agente
   ri-estrae, fonde e **ri-score** la risposta (riusando `build_feature_vector`, nessuna
-  call LLM extra); un lead promosso prosegue al booking, uno ancora debole va in
-  **nurturing** (`send_asset` → `NURTURED`) o all'operatore — **mai** in `invalid`.
+  call LLM extra); un lead promosso a booking-worthy prosegue al booking, uno ancora
+  `cold`/`warm` medio va all'operatore (`COMPLETED_INFO`) — **mai** in `invalid` e **mai**
+  in automazione (i `cold` non sono automatizzati, §7.1).
 - **Human-in-the-loop sull'azione costosa/irreversibile**: la **prenotazione** è un
   **gate vero**. L'agente **non** prenota in autonomia: `enforce()` mette l'azione in
   *stage* (`AgentSession.pending_action`), la registra `pending_approval` e la

@@ -1,9 +1,10 @@
 {
-  "_comment": "Category bands on the 0-100 score (REFACTOR_SPEC §5.4). Naive defaults; calibration would re-fit these where the historical conversion rate scales (docs/calibration.md). 'invalid' is NOT a band: it comes from the gate / looks_invalid. 'warm_high' is the value cutoff (near the hot threshold) above which a complete warm lead is treated as automation-worthy and the agent attempts the booking proactively (src/action/decision.py route_complete); also naive/calibratable.",
+  "_comment": "Category bands on the 0-100 score (REFACTOR_SPEC §5.4). Naive defaults; calibration would re-fit these where the historical conversion rate scales (docs/calibration.md). 'invalid' is NOT a band: it comes from the gate / looks_invalid. 'warm_high' is the value cutoff (near the hot threshold) above which a complete warm lead is treated as automation-worthy and the agent attempts the booking proactively (src/action/decision.py route_complete). 'recovery_coverage_min' is the minimum weighted extraction-coverage (over the §5.3 signal features, same naive weights, src/scoring/feature_vector.py extraction_coverage) an INCOMPLETE lead must reach for the agent to attempt info-recovery: an incomplete lead's band is unreliable (depressed by the very missing fields), so coverage -- not the band -- gates RECOVER_INFO (§7.1). All naive/calibratable.",
   "thresholds": {
-    "hot": 65,
-    "warm": 40,
-    "cold": 20,
-    "warm_high": 55
+    "hot": 72,
+    "warm": 45,
+    "cold": 25,
+    "warm_high": 62,
+    "recovery_coverage_min": 0.45
   }
 }

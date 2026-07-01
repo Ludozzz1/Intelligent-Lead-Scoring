@@ -32,7 +32,13 @@ _DEFAULT_WEIGHTS: dict[str, float] = {
     "recency": 7,
     "sentiment": 7,
 }
-_DEFAULT_THRESHOLDS: dict[str, int] = {"hot": 65, "warm": 40, "cold": 20}
+_DEFAULT_THRESHOLDS: dict[str, float] = {
+    "hot": 72,
+    "warm": 45,
+    "cold": 25,
+    "warm_high": 62,
+    "recovery_coverage_min": 0.45,
+}
 _DEFAULT_CATCHMENT: dict[str, list[str]] = {
     "home_zip_prefixes": ["20"],
     "adjacent_zip_prefixes": ["21", "22", "23", "24", "27", "28"],
@@ -73,16 +79,19 @@ def load_weights(settings: Settings | None = None) -> tuple[dict[str, float], st
 
 
 @lru_cache(maxsize=8)
-def _load_thresholds_cached(path: str) -> tuple[tuple[str, int], ...]:
+def _load_thresholds_cached(path: str) -> tuple[tuple[str, float], ...]:
     data = _read_json(Path(path))
     thr = data.get("thresholds") if data else None
     if isinstance(thr, dict):
-        return tuple((k, int(v)) for k, v in thr.items())
+        # float, not int: some cutoffs are fractional (e.g. recovery_coverage_min
+        # 0.45); int() would truncate the coverage gate to 0. The band cutoffs are
+        # whole numbers, so 65 == 65.0 keeps the score comparisons correct.
+        return tuple((k, float(v)) for k, v in thr.items())
     return tuple(_DEFAULT_THRESHOLDS.items())
 
 
-def load_thresholds(settings: Settings | None = None) -> dict[str, int]:
-    """Return the hot/warm/cold thresholds on the 0-100 score."""
+def load_thresholds(settings: Settings | None = None) -> dict[str, float]:
+    """Return the category bands + coverage gate on the 0-100 score."""
     s = settings or get_settings()
     return dict(_load_thresholds_cached(str(s.category_thresholds_path)))
 
