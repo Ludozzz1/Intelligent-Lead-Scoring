@@ -1,0 +1,7 @@
+{
+  "_comment": "Dealer geographic catchment (REFACTOR_SPEC §5.3 'match geografico city/zip <-> dealer'). A business/config fact, externalized out of code. ZIP match is by first-2-digit prefix; city is the fallback when ZIP is missing.",
+  "home_zip_prefixes": ["20"],
+  "adjacent_zip_prefixes": ["21", "22", "23", "24", "27", "28"],
+  "home_cities": ["milano"],
+  "adjacent_cities": ["monza", "como", "varese", "lecco", "bergamo", "pavia", "novara"]
+}

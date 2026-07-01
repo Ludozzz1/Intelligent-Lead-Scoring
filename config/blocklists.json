@@ -1,0 +1,20 @@
+{
+  "_comment": "Minimal, zero-cost structural blocklists for the validation gate (REFACTOR_SPEC §5.1, hybrid choice). Only cheap, unambiguous structural signals live here; semantic judgement (gibberish/spam/out-of-area) is the LLM's looks_invalid (§5.2), not a keyword list.",
+  "disposable_email_domains": [
+    "mailinator.com",
+    "guerrillamail.com",
+    "10minutemail.com",
+    "tempmail.com",
+    "temp-mail.org",
+    "trashmail.com",
+    "yopmail.com",
+    "throwawaymail.com",
+    "getnada.com",
+    "sharklasers.com",
+    "fakeinbox.com",
+    "dispostable.com",
+    "maildrop.cc",
+    "mailnesia.com",
+    "spam4.me"
+  ]
+}

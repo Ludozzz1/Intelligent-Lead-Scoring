@@ -1,0 +1,89 @@
+FLUSSO END-TO-END A DUE ZONE (take-home: ogni integrazione esterna e mockata dietro interfacce)
+================================================================================================
+
+  App Java / monolite (dashboard Vue)                    Mock esterni (Protocol, sostituibili)
+        |                                                  [ MockChannel    -> Twilio/SES ]
+        | pubblica il lead                                 [ MockCalendar   -> calendario dealer ]
+        v                                                  [ MockInventory  -> DMS/inventory ]
+  +-------------------+        +-----------------------+   [ MockTradeIn    -> stima permuta ]
+  | INGESTION (coda)  | -----> | consume_all (drain)   |   [ MockMonolithCallback -> backend Java ]
+  | InMemoryQueue     |  item  |  - 1 item alla volta  |
+  | (stand-in di SQS) |        |  - errore -> DLQ      |
+  +-------------------+        +-----------+-----------+
+        ^   |                              |
+        |   | POST /score (sincrono)       | un lead alla volta
+        |   v                              v
+  +-------------------+        +---------------------------------------------------------------+
+  | FastAPI /score    | -----> | ZONA 1 - HOT PATH  Pipeline.score_lead                        |
+  +-------------------+        | deterministico, <=2 min SLA, ESATTAMENTE UNA call LLM          |
+                              |  funzione totale: ogni stage degrada a un default, non solleva |
+                              +---------------------------------------------------------------+
+                                 |
+   (1) lead_id derivato (hash phone_key|email_key|created_at se mancante) + IDEMPOTENZA
+       cache hit per lead_id ---------------- HIT --> ritorna risultato in cache (is_duplicate=True)
+                                 | MISS
+                                 v
+   (2) GATE strutturale (src/gate/validity.py)   --- invalid --> categoria=invalid, azione=scartare
+       regole pure, NO LLM, binario, blocklist          (STOP: nessuna call LLM spesa)
+       (consenso NON e un check del gate)
+                                 | valido
+   (3) PERSONALIZZAZIONE (src/history.py): SOLO dedup / cliente di ritorno (no scoring dallo storico)
+                                 |
+   (4) ESTRAZIONE = LA SOLA CALL LLM (src/extraction/)
+       gate: lead invalid o message banale (<3 char) -> skip (niente LLM)
+       redact_message -> assert_no_raw_pii -> LLMAdapter.extract (mock-first via fixture)
+       timeout/errore LLM -> fallback solo-strutturale, flag low_confidence (lo SLA non dipende dall'LLM)
+       -> ExtractedFeatures (intent, budget, veicolo, permuta, urgenza, sentiment, looks_invalid, ...)
+                                 |
+   (5) SCORING deterministico (src/scoring/)
+       build_feature_vector (CONDIVISA, anti-skew) -> 9 feature normalizzate [0,1]
+       compute_score = vettore . pesi naive  ->  score 0-100 + contributi per-feature
+                                 |
+   (6) CATEGORIA (src/categorization/bands.py): soglie hot>=65 / warm>=40 / cold>=20
+       invalid NON e una banda: arriva dal gate o da looks_invalid dell'LLM
+                                 |
+   (7) MOTIVAZIONE deterministica (src/motivation/): rationale_signals + top contributi  (NO 2a call LLM)
+                                 |
+   (8) AZIONE (src/action/decision.py): lead_valido | chiedere_info | scartare + priority (0-100)
+       trigger agente SOLO per hot/warm che servono interazione aperta:
+         - info critiche mancanti -> goal recover_info
+         - disponibilita da negoziare -> goal negotiate_appointment
+                                 |
+       lo score torna SUBITO (con al piu un trigger) -> callback al monolite
+                                 v
+  +----------------------------------+        +---------------------------------+
+  | CALLBACK al monolite (mock REST) | -----> | Dashboard Vue: nuovi campi      |
+  | MockMonolithCallback.send_score  |  ack   | score / priorita / motivazione  |
+  +----------------------------------+        +---------------------------------+
+
+        ================ confine SLA: tutto cio che segue e FUORI dai 2 minuti ================
+
+                                 | (solo i lead triggati: hot/warm con interazione aperta)
+                                 v
+  +-----------------------------------------------------------------------------------------------+
+  | ZONA 2 - AGENTE (asincrono, event-driven, decoupled, NON nello SLA)                            |
+  | Un solo Lead-Resolution Agent = state machine (src/agent/state_machine.py)                     |
+  | Sessione PERSISTITA (src/agent/session_store.py); il runner la "sveglia" sugli eventi.         |
+  +-----------------------------------------------------------------------------------------------+
+       TRIGGERED
+          | goal=recover_info                         | goal=negotiate_appointment
+          v                                           v
+       send_message(richiesta info) [consent-gated]   check_inventory -> check_availability
+          |                                           -> send_message(slot proposti) [consent-gated]
+          v                                           v
+       AWAITING_USER_REPLY                            AWAITING_CONFIRMATION
+          | reply -> re_extract                          | reply -> re_extract
+          v                                              v
+       COMPLETED_INFO                                  conferma/slot -> book_appointment
+                                                       (pending_approval: conferma umana v1) -> BOOKED
+                                                       controproposta -> nuovi slot -> ...
+       Eventi/uscite trasversali:
+         NO_RESPONSE_TIMEOUT  -> DISQUALIFIED_NO_RESPONSE
+         budget passi/msg, tool error, rifiuto, ambiguita -> HANDOFF_HUMAN (escalate_to_human)
+       Tool mockati: re_extract, check_availability, estimate_trade_in, check_inventory,
+                     send_message (consent-gated), book_appointment (human-approval), escalate_to_human.
+       NESSUN mark_invalid: l'agente non disqualifica mai per qualita (resta il gate deterministico).
+
+INVARIANTE DURO: l'LLM produce SOLO ExtractedFeatures (stage 4). Non e mai nell'aritmetica dello
+score: gate, build_feature_vector, pesi e soglie sono deterministici. Un LLM lento/giu degrada i
+valori semantici (low_confidence), mai lo SLA. La calibrazione dei pesi appresi e OFFLINE (non a runtime).

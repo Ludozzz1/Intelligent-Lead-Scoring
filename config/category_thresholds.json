@@ -1,0 +1,9 @@
+{
+  "_comment": "Category bands on the 0-100 score (REFACTOR_SPEC §5.4). Naive defaults; calibration would re-fit these where the historical conversion rate scales (docs/calibration.md). 'invalid' is NOT a band: it comes from the gate / looks_invalid. 'warm_high' is the value cutoff (near the hot threshold) above which a complete warm lead is treated as automation-worthy and the agent attempts the booking proactively (src/action/decision.py route_complete); also naive/calibratable.",
+  "thresholds": {
+    "hot": 65,
+    "warm": 40,
+    "cold": 20,
+    "warm_high": 55
+  }
+}

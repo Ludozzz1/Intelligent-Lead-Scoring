@@ -1,0 +1,14 @@
+{
+  "_comment": "Naive (hand-tuned) weights for the deterministic linear scorer. These are the ACTIVE fallback: weights are NOT trained in this repo (out of scope). A learned config/score_weights.json (logistic coefficients over the SAME build_feature_vector, see docs/calibration.md) would take precedence. Each feature value is normalized to [0,1]; weights sum to 100 so score = sum(weight*value) lands in 0-100.",
+  "weights": {
+    "intent_strength": 18,
+    "budget_present": 15,
+    "reachability": 15,
+    "vehicle_specificity": 12,
+    "availability": 10,
+    "trade_in_present": 8,
+    "geo_match": 8,
+    "recency": 7,
+    "sentiment": 7
+  }
+}
