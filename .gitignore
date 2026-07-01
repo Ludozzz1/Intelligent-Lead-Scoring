@@ -14,6 +14,7 @@ __pycache__/
 
 # Claude Code
 .claude/
+CLAUDE.md
 
 # Eval artifacts (local only)
 eval_leads.json
