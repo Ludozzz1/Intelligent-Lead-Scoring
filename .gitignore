@@ -9,3 +9,13 @@ __pycache__/
 
 # Secrets / local env
 .env
+.env.*
+!.env.example
+
+# Claude Code
+.claude/
+
+# Eval artifacts (local only)
+eval_leads.json
+eval_results.md
+eval_weights_compare.md

@@ -1,0 +1,4 @@
+# Tutte le dipendenze del progetto (core + extra: dev, llm, cli, ui).
+# La lista autoritativa vive in pyproject.toml; questo file la installa in un colpo.
+# Uso: pip install -r requirements.txt
+-e .[dev,llm,cli,ui]
