@@ -4,15 +4,25 @@ from __future__ import annotations
 
 from src.action.suggestions import finalize_with_session
 from src.agent.guardrails import DECISION_RIGHTS
+from src.agent.planner import PlannerDecision
 from src.agent.runner import AgentRunner, human_approval, no_response, user_reply
+from src.agent.state_machine import advance
 from src.agent.tools import AgentTools
+from src.config import Settings
 from src.integrations.calendar import MockCalendar
-from src.models.agent import AgentState
+from src.models.agent import AgentGoal, AgentState
+from src.models.lead import ExtractedFeatures
 from src.pipeline import Pipeline
+from src.scoring.feature_vector import merge_features
 from tests.conftest import NOW, make_lead
 
+# An INCOMPLETE but high-value lead (score >= warm_high): strong intent + specific
+# model + availability, with BOTH budget and timeline missing. Under the single
+# trigger rule the agent recovers the missing fields, then books; a partial reply
+# resolves one field while it keeps chasing the other. (Maps to a curated fixture
+# base in scripts/build_mock_extractions.py -> data/mock_extractions.json.)
 _RECOVER_MSG = (
-    "Sto valutando una Renault Captur, vorrei sapere i prezzi e le promozioni disponibili."
+    "Sono molto interessato alla Renault Captur, vorrei vederla e provarla il prima possibile."
 )
 
 
@@ -99,6 +109,59 @@ def test_recover_enriches_then_books_on_confirmation():
          human_approval()],
     )
     assert s.state == AgentState.BOOKED
+
+
+class _CompletePlanner:
+    """Stub planner that immediately completes (mimics the observed LLM behaviour)."""
+
+    def next_action(self, *args, **kwargs) -> PlannerDecision:
+        return PlannerDecision(action="complete", next_state=AgentState.COMPLETED_INFO)
+
+
+def test_planner_complete_on_recover_still_promotes_to_booking():
+    # Parity fix: when ANY planner (e.g. the LLM) completes a recover_info session, the
+    # state machine re-scores the recovered lead deterministically and -- if it is now
+    # booking-worthy -- promotes it to a booking instead of stopping at COMPLETED_INFO.
+    scored, lead = _scored(lead_id="A14", message=_RECOVER_MSG)
+    assert scored.agent_goal == "recover_info"
+    runner = AgentRunner()
+    session = runner.start_session(scored, lead)  # kickoff asks for info, then waits
+    assert session.state == AgentState.AWAITING_USER_REPLY
+
+    advance(
+        session,
+        user_reply("Il mio budget è 25000 euro, vorrei comprare entro un mese."),
+        runner.tools,
+        Settings(),
+        planner=_CompletePlanner(),
+    )
+    assert session.goal == AgentGoal.NEGOTIATE_APPOINTMENT  # promoted, not completed
+    assert session.state == AgentState.AWAITING_CONFIRMATION
+    assert session.proposed_slots
+    assert "re_extract" in _tools(session.actions)  # re-scored off the reply
+
+
+def test_merge_removes_answered_field_without_reintroducing_known():
+    # When the user answers one field at a time, the merge must remove the answered
+    # field WITHOUT re-flagging as missing a field the base already knew (else recovery
+    # never converges -- the reply extracted alone reports the others missing).
+    base = ExtractedFeatures(extraction_source="mock", extraction_confidence=0.9,
+                             missing_critical_fields=["timeline_acquisto"])  # budget known
+    reply = ExtractedFeatures(extraction_source="mock", extraction_confidence=0.9,
+                              missing_critical_fields=["budget"])  # reply gives timeline, not budget
+    assert merge_features(base, reply).missing_critical_fields == []
+
+    # Partial answer -> keep chasing exactly the field still missing.
+    base2 = ExtractedFeatures(extraction_source="mock", extraction_confidence=0.9,
+                              missing_critical_fields=["budget", "timeline_acquisto"])
+    reply2 = ExtractedFeatures(extraction_source="mock", extraction_confidence=0.9,
+                               missing_critical_fields=["timeline_acquisto"])
+    assert merge_features(base2, reply2).missing_critical_fields == ["timeline_acquisto"]
+
+    # Low-confidence reply -> keep the base's needs unchanged (no false completion).
+    weak = ExtractedFeatures(extraction_source="mock", extraction_confidence=0.2,
+                             missing_critical_fields=[])
+    assert merge_features(base2, weak).missing_critical_fields == ["budget", "timeline_acquisto"]
 
 
 def test_recover_partial_keeps_chasing():

@@ -37,7 +37,6 @@ _DEFAULT_THRESHOLDS: dict[str, float] = {
     "warm": 45,
     "cold": 25,
     "warm_high": 62,
-    "recovery_coverage_min": 0.45,
 }
 _DEFAULT_CATCHMENT: dict[str, list[str]] = {
     "home_zip_prefixes": ["20"],
@@ -83,15 +82,14 @@ def _load_thresholds_cached(path: str) -> tuple[tuple[str, float], ...]:
     data = _read_json(Path(path))
     thr = data.get("thresholds") if data else None
     if isinstance(thr, dict):
-        # float, not int: some cutoffs are fractional (e.g. recovery_coverage_min
-        # 0.45); int() would truncate the coverage gate to 0. The band cutoffs are
-        # whole numbers, so 65 == 65.0 keeps the score comparisons correct.
+        # float, not int: keeps calibrated/fractional cutoffs intact. The band
+        # cutoffs are whole numbers, so 65 == 65.0 keeps the score comparisons correct.
         return tuple((k, float(v)) for k, v in thr.items())
     return tuple(_DEFAULT_THRESHOLDS.items())
 
 
 def load_thresholds(settings: Settings | None = None) -> dict[str, float]:
-    """Return the category bands + coverage gate on the 0-100 score."""
+    """Return the category bands + the ``warm_high`` automation cutoff (0-100 score)."""
     s = settings or get_settings()
     return dict(_load_thresholds_cached(str(s.category_thresholds_path)))
 

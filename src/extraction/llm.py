@@ -115,19 +115,24 @@ class LLMAdapter:
     # -- public --------------------------------------------------------------
 
     def extract(
-        self, redacted_message: str, context: dict | None = None
+        self,
+        redacted_message: str,
+        context: dict | None = None,
+        reply_context: dict | None = None,
     ) -> ExtractedFeatures:
         """Extract features from an already-redacted message.
 
         Mock mode resolves deterministically (fixture or low-confidence default).
         OpenAI mode raises :class:`LLMError` on any failure so the caller can
-        fall back to a structured-only default.
+        fall back to a structured-only default. ``reply_context`` (optional) reframes
+        the message as the answer to a specific question (see build_extraction_messages);
+        the mock ignores it.
         """
         if not self._openai_active():
             return self._mock_extract(redacted_message)
 
         try:  # pragma: no cover - requires live OpenAI
-            features = self._openai_extract(redacted_message, context)
+            features = self._openai_extract(redacted_message, context, reply_context)
         except LLMError:
             self._consecutive_failures += 1
             raise
@@ -138,21 +143,26 @@ class LLMAdapter:
         self._consecutive_failures = 0
         return features
 
-    def complete_json(
-        self, system: str, messages: list[dict], schema: dict, model: str | None = None
-    ) -> dict[str, Any]:
-        """Reusable structured-output call returning a schema-validated JSON object.
+    def complete_tool_call(
+        self, system: str, messages: list[dict], tools: list[dict],
+        model: str | None = None,
+    ) -> tuple[str, dict[str, Any]]:
+        """Native tool-calling call returning ONE ``(tool_name, arguments)``.
 
-        Used by the agent's LLM planner (off the hot path). ``model`` selects the
-        deployment and defaults to the extraction model; the agent passes its own
-        ``openai_agent_model`` so the two calls can run on different tiers.
-        Mock-first like :meth:`extract`: with no live OpenAI backend it raises
-        :class:`LLMError` so the caller degrades deterministically (there is no
-        offline "planner mock" -- in mock mode the deterministic planner is used
-        directly). Shares the same circuit breaker as extraction.
+        Used by the agent's LLM planner (off the hot path). Forces exactly one
+        tool call (``tool_choice="required"`` + ``parallel_tool_calls=False``),
+        which maps 1:1 the planner contract of "one action per step" and lets the
+        provider validate the tool name + arguments against ``tools``. ``model``
+        selects the deployment and defaults to the extraction model; the agent
+        passes its own ``openai_agent_model`` so the two calls can run on
+        different tiers. Mock-first like :meth:`extract`: with no live OpenAI
+        backend it raises :class:`LLMError` so the caller degrades
+        deterministically (there is no offline "planner mock" -- in mock mode the
+        deterministic planner is used directly). Shares the circuit breaker with
+        extraction.
         """
         if not self._openai_active():
-            raise LLMError("complete_json has no offline backend (use mock planner).")
+            raise LLMError("complete_tool_call has no offline backend (use mock planner).")
 
         try:  # pragma: no cover - requires live OpenAI
             full_messages = [{"role": "system", "content": system}, *messages]
@@ -161,21 +171,25 @@ class LLMAdapter:
                 messages=full_messages,
                 temperature=0,
                 timeout=self._settings.llm_timeout_s,
-                response_format={"type": "json_schema", "json_schema": schema},
+                tools=tools,
+                tool_choice="required",
+                parallel_tool_calls=False,
             )
-            content = response.choices[0].message.content
-            if not content:
-                raise LLMError("Empty OpenAI completion response.")
-            data = json.loads(content)
+            calls = response.choices[0].message.tool_calls
+            if not calls:
+                raise LLMError("OpenAI returned no tool call.")
+            call = calls[0]
+            name = call.function.name
+            args = json.loads(call.function.arguments or "{}")
         except LLMError:
             self._consecutive_failures += 1
             raise
         except Exception as exc:  # noqa: BLE001
             self._consecutive_failures += 1
-            raise LLMError(f"OpenAI completion failed: {exc}") from exc
+            raise LLMError(f"OpenAI tool call failed: {exc}") from exc
 
         self._consecutive_failures = 0
-        return data
+        return name, args
 
     def _mock_extract(self, redacted_message: str) -> ExtractedFeatures:
         data = self._fixture.get(_normalize_message(redacted_message))
@@ -186,9 +200,10 @@ class LLMAdapter:
         return ExtractedFeatures(**payload)
 
     def _openai_extract(  # pragma: no cover - requires live OpenAI
-        self, redacted_message: str, context: dict | None
+        self, redacted_message: str, context: dict | None,
+        reply_context: dict | None = None,
     ) -> ExtractedFeatures:
-        messages = build_extraction_messages(redacted_message, context)
+        messages = build_extraction_messages(redacted_message, context, reply_context)
         response = self._client.chat.completions.create(  # type: ignore[union-attr]
             model=self._settings.openai_model,
             messages=messages,

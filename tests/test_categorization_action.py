@@ -5,7 +5,7 @@ from __future__ import annotations
 from src.action.decision import decide_action
 from src.categorization.bands import categorize
 from src.models.agent import AgentGoal
-from src.models.features import FeatureVector, ScoreResult
+from src.models.features import ScoreResult
 from src.models.lead import ExtractedFeatures
 from src.models.scoring import Personalization, ValidityResult
 from src.motivation.motivation import build_motivation
@@ -14,18 +14,8 @@ _VALID = ValidityResult(is_valid=True, failure_type="none")
 _INVALID = ValidityResult(is_valid=False, failure_type="invalid", reasons=["phone_bogus"])
 _NOPERS = Personalization()
 
-# Recovery is gated on extraction COVERAGE, not the (missing-field-depressed)
-# band: a rich extraction clears the gate, a sparse one does not.
-_RICH_VECTOR = FeatureVector(values={
-    "intent_strength": 1.0, "budget_present": 1.0, "reachability": 1.0,
-    "vehicle_specificity": 1.0, "availability": 1.0, "trade_in_present": 1.0,
-    "geo_match": 1.0, "sentiment": 1.0, "recency": 1.0,
-})
-_SPARSE_VECTOR = FeatureVector(values={
-    "intent_strength": 0.2, "budget_present": 0.0, "reachability": 0.0,
-    "vehicle_specificity": 0.0, "availability": 0.0, "trade_in_present": 0.0,
-    "geo_match": 0.1, "sentiment": 0.5, "recency": 1.0,
-})
+# ONE trigger rule: the agent starts iff consent AND score >= warm_high (62).
+# Missing info -> RECOVER_INFO (recover then book); complete -> NEGOTIATE.
 
 
 # --- categorization ---------------------------------------------------------
@@ -54,29 +44,26 @@ def test_invalid_discards_without_agent():
     assert d.agent_goal is None
 
 
-def test_incomplete_rich_extraction_with_consent_triggers_recover():
+def test_incomplete_highvalue_with_consent_triggers_recover():
+    # score >= warm_high (62): the agent recovers the missing info, then books.
     feats = ExtractedFeatures(missing_critical_fields=["budget"])
-    # Coverage, not the band, gates recovery: a rich extraction is worth chasing
-    # even when the missing field drags the score into a lower band.
-    for cat, score in (("warm", 50), ("cold", 30)):
-        d = decide_action(cat, _VALID, feats, score, _NOPERS,
-                          consent=True, vector=_RICH_VECTOR)
+    for cat, score in (("hot", 80), ("warm", 65)):
+        d = decide_action(cat, _VALID, feats, score, _NOPERS, consent=True)
         assert d.recommended_action == "chiedere_info"
         assert d.agent_goal == AgentGoal.RECOVER_INFO
 
 
-def test_incomplete_sparse_extraction_goes_to_operator():
+def test_incomplete_below_threshold_goes_to_operator():
+    # A mid/low warm below warm_high is not automated: the operator asks.
     feats = ExtractedFeatures(missing_critical_fields=["budget"])
-    d = decide_action("warm", _VALID, feats, 50, _NOPERS,
-                      consent=True, vector=_SPARSE_VECTOR)
+    d = decide_action("warm", _VALID, feats, 55, _NOPERS, consent=True)
     assert d.recommended_action == "chiedere_info"
-    assert d.agent_goal is None  # too little signal to chase -> operator asks
+    assert d.agent_goal is None
 
 
 def test_incomplete_without_consent_goes_to_operator():
     feats = ExtractedFeatures(missing_critical_fields=["budget"])
-    d = decide_action("hot", _VALID, feats, 80, _NOPERS,
-                      consent=None, vector=_RICH_VECTOR)
+    d = decide_action("hot", _VALID, feats, 80, _NOPERS, consent=None)
     assert d.recommended_action == "chiedere_info"
     assert d.agent_goal is None  # no consent -> the operator asks, no agent hop
 

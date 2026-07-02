@@ -63,6 +63,23 @@ REPLIES: dict[str, dict] = {
 }
 
 
+# Curated high-value but INCOMPLETE base for the agent recovery tests: strong
+# intent/model/availability signals (so score >= warm_high and the agent triggers)
+# with BOTH budget and timeline still missing -- a partial reply then resolves one
+# field while the agent keeps chasing the other. Keyed by its own text (not a demo
+# lead). Its structured score depends on the caller's lead fields.
+TEST_BASES: dict[str, dict] = {
+    "Sono molto interessato alla Renault Captur, vorrei vederla e provarla il prima possibile.": dict(
+        budget_value_eur=None, budget_present=False, vehicle_model_mentioned="Renault Captur",
+        vehicle_specificity="specific", trade_in_present=False, trade_in_vehicle=None,
+        urgency_signals=["il prima possibile"], intent_strength="high", availability_mentioned=True,
+        sentiment="positive", missing_critical_fields=["budget", "timeline_acquisto"],
+        looks_invalid=False, extraction_confidence=0.9,
+        rationale_signals="intento alto e disponibilità dichiarata, mancano budget e tempistica",
+    ),
+}
+
+
 def main() -> None:
     leads = json.loads((_REPO / "data" / "leads_mock.json").read_text(encoding="utf-8"))
     by_id = {lead["lead_id"]: lead for lead in leads}
@@ -75,8 +92,8 @@ def main() -> None:
         key = _normalize_message(redact_message(lead.get("message")))
         by_message[key] = feats
 
-    # Recovery replies are keyed by their own (normalized+redacted) text.
-    for message, feats in REPLIES.items():
+    # Recovery replies + test bases are keyed by their own (normalized+redacted) text.
+    for message, feats in {**REPLIES, **TEST_BASES}.items():
         by_message[_normalize_message(redact_message(message))] = feats
 
     out = {

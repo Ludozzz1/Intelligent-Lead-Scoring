@@ -1,0 +1,16 @@
+{
+  "lead_id": "SHOW-WARM-LOW-2",
+  "platform": "DriveK",
+  "channel": "organic",
+  "message": "Buongiorno, sarei interessato alla Renault Clio ma non ho ancora deciso quanto spendere. Vorrei qualche informazione.",
+  "vehicle_interest": "Renault Clio",
+  "city": "Firenze",
+  "zip_code": "50122",
+  "phone": "3387740219",
+  "name": "Luca",
+  "surname": "Marino",
+  "email": "luca.marino@libero.it",
+  "campaign": "City Car Promo",
+  "created_at": "2026-06-30T11:40:00",
+  "consent": true
+}

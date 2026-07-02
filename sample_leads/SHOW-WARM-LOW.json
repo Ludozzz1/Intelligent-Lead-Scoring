@@ -1,0 +1,16 @@
+{
+  "lead_id": "SHOW-WARM-LOW",
+  "platform": "DriveK",
+  "channel": "organic",
+  "message": "Buongiorno, sarei interessato alla Fiat Panda ma non ho ancora deciso il budget. Vorrei qualche informazione.",
+  "vehicle_interest": "Fiat Panda",
+  "city": "Milano",
+  "zip_code": "20144",
+  "phone": "3355098210",
+  "name": "Davide",
+  "surname": "Ferro",
+  "email": "davide.ferro@libero.it",
+  "campaign": "City Car Promo",
+  "created_at": "2026-06-29T11:15:00",
+  "consent": true
+}

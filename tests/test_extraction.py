@@ -56,6 +56,21 @@ def test_looks_invalid_extracted_for_gibberish():
     assert f.looks_invalid is True
 
 
+def test_reply_context_reframes_extraction_prompt():
+    # With reply_context the prompt is built differently: it marks the text as the
+    # answer to a specific question (fields + vehicle), so a short reply is not
+    # extracted in a vacuum. Without it, the message is passed through unchanged.
+    from src.extraction.prompts import build_extraction_messages
+
+    user = build_extraction_messages(
+        "entro due settimane",
+        reply_context={"vehicle": "Audi Q3", "fields": ["timeline_acquisto"]},
+    )[-1]["content"]
+    assert "REPLY" in user and "timeline_acquisto" in user and "Audi Q3" in user
+    assert "entro due settimane" in user
+    assert build_extraction_messages("ciao")[-1]["content"] == "ciao"
+
+
 def test_redaction_strips_pii_before_adapter():
     captured: dict[str, str] = {}
 

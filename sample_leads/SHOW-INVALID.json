@@ -1,0 +1,16 @@
+{
+  "lead_id": "SHOW-INVALID",
+  "platform": "AutoXY",
+  "channel": "meta",
+  "message": "asdasd qwe qwe 123 test",
+  "vehicle_interest": "BMW Serie 1",
+  "city": "Verona",
+  "zip_code": "37100",
+  "phone": "1111111111",
+  "name": "qwe",
+  "surname": "asd",
+  "email": "junk@mailinator.com",
+  "campaign": "Electric Spring",
+  "created_at": "2026-06-29T08:40:00",
+  "consent": true
+}

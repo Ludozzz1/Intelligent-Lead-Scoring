@@ -1,0 +1,16 @@
+{
+  "lead_id": "SHOW-WARM-HIGH",
+  "platform": "AutoXY",
+  "channel": "google",
+  "message": "Sono interessato alla Audi Q3, budget 38.000 euro. Vorrei ricevere un preventivo dettagliato.",
+  "vehicle_interest": "Audi Q3",
+  "city": "Roma",
+  "zip_code": "00195",
+  "phone": "3204451190",
+  "name": "Chiara",
+  "surname": "Longo",
+  "email": "chiara.longo@outlook.it",
+  "campaign": "Search Brand",
+  "created_at": "2026-06-29T10:05:00",
+  "consent": true
+}

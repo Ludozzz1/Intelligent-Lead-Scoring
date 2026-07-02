@@ -18,6 +18,12 @@ from typing import Any
 # LLM_MODE=openai (env vars take precedence over .env in pydantic-settings).
 os.environ["LLM_MODE"] = "mock"
 os.environ["OPENAI_API_KEY"] = ""
+# Pin the agent budgets to the code defaults too: a developer's .env may raise them
+# for manual runs (e.g. AGENT_MAX_TURNS), but the guardrail tests assume the defaults.
+os.environ["AGENT_MAX_TURNS"] = "6"
+os.environ["AGENT_MAX_MESSAGES"] = "4"
+os.environ["AGENT_MAX_LLM_CALLS"] = "8"
+os.environ["AGENT_MAX_FOLLOWUPS"] = "2"
 
 import pytest
 

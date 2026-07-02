@@ -42,11 +42,10 @@ lead → [gate] → [extraction: UNICA call LLM] → [scoring lineare] → [cate
   `rationale_signals` + contributi. **Nessuna seconda call LLM.**
 
 **Zona 2 — Agente** ([src/agent/](src/agent/)): un singolo **Lead-Resolution Agent**
-event-driven, **fuori dallo SLA**. Automazione **ristretta ai lead ad alto valore**
-(`hot` e `warm ≥ warm_high`): completo → `negotiate_appointment` (booking proattivo);
-incompleto **con estrazione ricca** (`recovery_worthy`: copertura ≥ `recovery_coverage_min`,
-non la banda) → `recover_info` (poi **ri-score** e ri-instrada); `cold`, warm medio o senza
-consenso → operatore (i `cold` **mai** in automazione). Il loop è guidato da un **planner** — deterministico in mock
+event-driven, **fuori dallo SLA**. **Una sola regola** attiva l'agente: consenso **e**
+`score ≥ warm_high` (gli `hot` sono sempre sopra). Se mancano info → `recover_info`
+(recupera, **ri-score** e prenota, §7.2); se completo → `negotiate_appointment` (booking
+proattivo). Warm medio/basso, `cold` o senza consenso → operatore (**mai** agente). Il loop è guidato da un **planner** — deterministico in mock
 (default, comportamento riproducibile, zero token) o **LLM** off-SLA con degrade —
 ma ogni azione passa da `enforce()` (**"l'LLM propone, il deterministico dispone"**):
 tool mockati, guardrail e diritti di decisione (vedi

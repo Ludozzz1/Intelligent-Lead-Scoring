@@ -8,9 +8,10 @@ share the same protocol:
 * :class:`DeterministicPlanner` -- the default in ``llm_mode="mock"``: a faithful
   1:1 translation of the legacy trajectories (keyword matching), so existing
   behaviour and tests are preserved.
-* :class:`LLMPlanner` -- real tool-calling via :meth:`LLMAdapter.complete_json`
-  (off the SLA). On any failure it raises ``LLMError`` and the loop degrades to the
-  deterministic planner.
+* :class:`LLMPlanner` -- real native tool-calling via
+  :meth:`LLMAdapter.complete_tool_call` (off the SLA), translating one tool call
+  into a :class:`PlannerDecision`. On any failure it raises ``LLMError`` and the
+  loop degrades to the deterministic planner.
 
 The planner only *proposes*; ``enforce`` disposes (block / stage / allow). It never
 scores or invalidates a lead.
@@ -20,17 +21,17 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 from src.action.decision import route_complete
 from src.agent.agent_prompts import (
-    PLANNER_DECISION_SCHEMA,
     PLANNER_SYSTEM_PROMPT,
+    PLANNER_TOOLS,
     build_planner_messages,
 )
 from src.categorization.bands import categorize
 from src.config import Settings
-from src.extraction.llm import LLMAdapter, LLMError
+from src.extraction.llm import LLMAdapter
 from src.models.agent import (
     AgentAction,
     AgentEvent,
@@ -100,7 +101,7 @@ def _call(tool: str, *, args: dict | None = None, next_state: AgentState | None 
                            next_state=next_state, rationale=rationale)
 
 
-def _rescore(
+def rescore_recovery(
     session: AgentSession, reply_features, settings: Settings
 ) -> tuple[int, str, object]:
     """Re-score the lead off the SLA after a recovery reply (§7.2).
@@ -243,7 +244,7 @@ class DeterministicPlanner:
             return PlannerDecision(action="handoff", reason="reply_uninformative")
 
         prev_missing = set(session.missing_fields)
-        score, category, merged = _rescore(session, reply, settings)
+        score, category, merged = rescore_recovery(session, reply, settings)
         session.category = category
         session.final_score = score  # persisted so the operator view can realign (§7.2)
         session.missing_fields = list(merged.missing_critical_fields)
@@ -313,12 +314,60 @@ class DeterministicPlanner:
         return PlannerDecision(action="handoff", reason="ambiguous_reply")
 
 
-class LLMPlanner:
-    """Real tool-calling planner via structured output (off the SLA, mock-first).
+# Domain tool -> FSM transition. The model picks the tool + domain args; the
+# transition stays in code (mirrors the DeterministicPlanner trajectories) so the
+# model never chooses FSM states and the session stays coherent for the operator
+# view and for a deterministic fallback. Intermediate tools (check_inventory,
+# simulate_financing, ...) keep the current state (None).
+def _next_state_for(
+    state: AgentState, tool: str, args: dict
+) -> AgentState | None:
+    if tool == "re_extract":
+        return AgentState.EVALUATING_REPLY
+    if tool == "check_availability":
+        return AgentState.PROPOSING_SLOT
+    if tool == "book_appointment":
+        return AgentState.BOOKED
+    if tool == "send_message":
+        template = args.get("template")
+        if template == "request_missing_info":
+            return AgentState.AWAITING_USER_REPLY
+        if template == "propose_slots":
+            return AgentState.AWAITING_CONFIRMATION
+    return None
 
-    Builds a PII-safe decision prompt and asks the adapter for one structured
-    :class:`PlannerDecision`. Any failure (no backend, timeout, invalid output)
-    raises ``LLMError`` so the loop degrades to :class:`DeterministicPlanner`.
+
+def _decision_from_tool_call(
+    session: AgentSession, name: str, args: dict
+) -> PlannerDecision:
+    """Translate one native tool call into a PlannerDecision (``enforce`` disposes).
+
+    The 3 control tools map to the loop's non-tool actions; any other name is a
+    domain tool (the provider validated it against PLANNER_TOOLS) whose FSM
+    transition is derived deterministically.
+    """
+    if name == "wait_for_user":
+        return PlannerDecision(action="wait_user", next_state=session.state,
+                               rationale=str(args.get("reason", "")))
+    if name == "complete":
+        return PlannerDecision(action="complete", next_state=AgentState.COMPLETED_INFO,
+                               reason=str(args.get("outcome", "info_completed")))
+    if name == "handoff":
+        return PlannerDecision(action="handoff", reason=str(args.get("reason", "handoff")))
+    return PlannerDecision(
+        action="call_tool", tool=name, args=dict(args),
+        next_state=_next_state_for(session.state, name, args),
+        rationale=f"pianificato dall'LLM: {name}",
+    )
+
+
+class LLMPlanner:
+    """Real native tool-calling planner (off the SLA, mock-first).
+
+    Builds a PII-safe decision prompt and asks the adapter for exactly ONE native
+    tool call, then *translates* it into a :class:`PlannerDecision` (``enforce``
+    still disposes). Any failure (no backend, timeout, no tool call) raises
+    ``LLMError`` so the loop degrades to :class:`DeterministicPlanner`.
     """
 
     def __init__(self, adapter: LLMAdapter) -> None:
@@ -332,11 +381,8 @@ class LLMPlanner:
         settings: Settings,
     ) -> PlannerDecision:
         messages = build_planner_messages(session, event, wake)
-        data = self._adapter.complete_json(
-            PLANNER_SYSTEM_PROMPT, messages, PLANNER_DECISION_SCHEMA,
+        name, args = self._adapter.complete_tool_call(
+            PLANNER_SYSTEM_PROMPT, messages, PLANNER_TOOLS,
             model=settings.openai_agent_model,
         )
-        try:
-            return PlannerDecision(**data)
-        except ValidationError as exc:  # pragma: no cover - requires live OpenAI
-            raise LLMError(f"Invalid planner decision: {exc}") from exc
+        return _decision_from_tool_call(session, name, args)

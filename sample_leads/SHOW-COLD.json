@@ -1,0 +1,16 @@
+{
+  "lead_id": "SHOW-COLD",
+  "platform": "Quattroruote",
+  "channel": "organic",
+  "message": "Salve, vorrei avere qualche informazione generica sulle auto che avete disponibili.",
+  "vehicle_interest": "",
+  "city": "Bari",
+  "zip_code": "70125",
+  "phone": "3401180077",
+  "name": "Simona",
+  "surname": "Greco",
+  "email": "simona.greco@gmail.com",
+  "campaign": "n/a",
+  "created_at": "2026-06-29T12:00:00",
+  "consent": true
+}

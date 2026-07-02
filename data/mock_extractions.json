@@ -441,6 +441,27 @@
       "looks_invalid": false,
       "extraction_confidence": 0.85,
       "rationale_signals": "budget fornito, manca la tempistica"
+    },
+    "sono molto interessato alla renault captur, vorrei vederla e provarla il prima possibile.": {
+      "budget_value_eur": null,
+      "budget_present": false,
+      "vehicle_model_mentioned": "Renault Captur",
+      "vehicle_specificity": "specific",
+      "trade_in_present": false,
+      "trade_in_vehicle": null,
+      "urgency_signals": [
+        "il prima possibile"
+      ],
+      "intent_strength": "high",
+      "availability_mentioned": true,
+      "sentiment": "positive",
+      "missing_critical_fields": [
+        "budget",
+        "timeline_acquisto"
+      ],
+      "looks_invalid": false,
+      "extraction_confidence": 0.9,
+      "rationale_signals": "intento alto e disponibilità dichiarata, mancano budget e tempistica"
     }
   }
 }

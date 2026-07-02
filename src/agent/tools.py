@@ -64,10 +64,16 @@ class AgentTools:
 
     # -- §7.3 tools ----------------------------------------------------------
 
-    def re_extract(self, message: str | None) -> ExtractedFeatures:
-        """Re-analyze the user's reply (PII-redacted) into ExtractedFeatures."""
+    def re_extract(
+        self, message: str | None, reply_context: dict | None = None
+    ) -> ExtractedFeatures:
+        """Re-analyze the user's reply (PII-redacted) into ExtractedFeatures.
+
+        ``reply_context`` (vehicle + fields asked) lets the extractor read a short
+        reply as the answer to that question instead of in a vacuum (§7.2).
+        """
         redacted = redact_message(message)
-        return self.adapter.extract(redacted)
+        return self.adapter.extract(redacted, reply_context=reply_context)
 
     def check_availability(self, preferences: dict | None = None) -> list[str]:
         return self.calendar.check_availability(self.dealer_id, preferences or {})

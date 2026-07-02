@@ -127,7 +127,7 @@ class Pipeline:
 
         action = decide_action(
             category, validity, features, final_score, personalization,
-            consent=lead.consent, settings=self._settings, vector=vector,
+            consent=lead.consent, settings=self._settings,
         )
         motivation = build_motivation(category, validity, features, score_result)
 

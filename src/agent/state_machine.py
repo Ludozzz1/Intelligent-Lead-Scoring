@@ -20,8 +20,14 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from src.action.decision import route_complete
 from src.agent.guardrails import enforce, limit_breached
-from src.agent.planner import DeterministicPlanner, LLMPlanner, Planner
+from src.agent.planner import (
+    DeterministicPlanner,
+    LLMPlanner,
+    Planner,
+    rescore_recovery,
+)
 from src.agent.tools import AgentTools
 from src.config import Settings, get_settings
 from src.extraction.llm import LLMError
@@ -30,12 +36,20 @@ from src.models.agent import (
     AgentAction,
     AgentEvent,
     AgentEventType,
+    AgentGoal,
     AgentSession,
     AgentState,
 )
 
 # Outbound message tools that count against the per-lead message budget.
 _OUTBOUND_MESSAGE_TOOLS = frozenset({"send_message", "send_asset", "capture_consent"})
+# States that wait for an external event (a reply / a timeout): once an outbound
+# message lands here, the wake must stop -- the next decision depends on the user's
+# reply, not on the agent chaining further actions autonomously.
+_WAITING_STATES = frozenset({
+    AgentState.AWAITING_USER_REPLY,
+    AgentState.AWAITING_CONFIRMATION,
+})
 # Safety net: max tool steps within a single wake (prevents intra-wake runaway).
 _MAX_WAKE_STEPS = 12
 
@@ -88,6 +102,16 @@ def advance(
             return session
 
         if enforced.action == "complete":
+            # Before completing a recover_info session, deterministically re-score the
+            # recovered lead: if it is now booking-worthy, promote it to a booking
+            # instead of just completing. Enforced here (not in a planner) so it holds
+            # for ANY planner -- the LLM orchestrates the conversation but never judges
+            # booking-worthiness. On promotion the deterministic planner drives the
+            # negotiation to a slot proposal.
+            if (session.goal == AgentGoal.RECOVER_INFO
+                    and _promote_recovered_lead(session, event, tools, settings)):
+                active = DeterministicPlanner()
+                continue
             # A 'complete' MUST land on a terminal state; a malformed planner
             # decision (e.g. LLM 'complete' without next_state) hands off rather
             # than leaving the session stuck non-terminal forever.
@@ -133,6 +157,16 @@ def advance(
             session.state = enforced.next_state
         if enforced.tool in _OUTBOUND_MESSAGE_TOOLS:
             session.messages_sent += 1
+        # "Ask, then wait": a send_message that moves the session into a waiting state
+        # (request_missing_info -> AWAITING_USER_REPLY, propose_slots ->
+        # AWAITING_CONFIRMATION) ends the wake. The next step must be driven by the
+        # user's reply (an external event), never chained in the same wake. Enforced in
+        # code so it holds for ANY planner -- the LLM cannot run past a question it just
+        # asked (e.g. answer itself, then complete) the way it could when only a
+        # 'wait_user' decision stopped the loop. capture_consent is intentionally
+        # excluded: its opt-in wait may be followed by a handoff in the same wake.
+        if enforced.tool == "send_message" and session.state in _WAITING_STATES:
+            return session
 
 
 # --- planner selection ------------------------------------------------------
@@ -171,6 +205,61 @@ def _on_human_approval(
     return session
 
 
+# --- recovery re-score & promotion ------------------------------------------
+
+
+def _reply_context(session: AgentSession) -> dict | None:
+    """Question context for re-extracting a recovery reply: the vehicle + the fields
+    just asked. Lets the extractor read a short answer (e.g. "entro due settimane") as
+    the answer to that question instead of in a vacuum. None outside recovery (nothing
+    was asked, so no reframing)."""
+    if not session.missing_fields:
+        return None
+    return {"vehicle": session.vehicle_interest, "fields": list(session.missing_fields)}
+
+
+def _promote_recovered_lead(
+    session: AgentSession,
+    event: AgentEvent,
+    tools: AgentTools,
+    settings: Settings,
+) -> bool:
+    """Re-score a recovered lead before it completes; promote it to a booking if worthy.
+
+    Mirrors ``DeterministicPlanner._eval_recover``'s promotion so the SAME rule applies
+    under the LLM planner: merge the reply's fresh extraction into the cached base,
+    re-score deterministically, and -- if the lead is now complete and booking-worthy --
+    switch the goal to ``negotiate_appointment`` (returning True). If the reply was never
+    re-extracted (the LLM may have skipped it) we re-extract it here so the re-score has
+    real signals. Returns False when the lead stays incomplete or not automation-worthy,
+    letting the caller complete it as ``COMPLETED_INFO``.
+    """
+    reply = session.last_reply_features
+    if reply is None:
+        text = event.text if event and event.type == AgentEventType.USER_REPLY else None
+        if not text:
+            return False
+        reply = tools.re_extract(text, _reply_context(session))
+        session.last_reply_features = reply
+        _record(session, "re_extract", "executed",
+                "rianalisi della risposta e ri-valutazione dello score",
+                {}, _result_for_audit("re_extract", reply))
+
+    score, category, merged = rescore_recovery(session, reply, settings)
+    session.category = category
+    session.final_score = score  # persisted so the operator view can realign (§7.2)
+    session.missing_fields = list(merged.missing_critical_fields)
+    if session.missing_fields:
+        return False  # still incomplete -> complete as COMPLETED_INFO
+
+    _action, goal = route_complete(category, score, session.consent is True, settings)
+    if goal != AgentGoal.NEGOTIATE_APPOINTMENT:
+        return False  # cold / mid-warm after enrichment -> operator, not automation
+    session.goal = AgentGoal.NEGOTIATE_APPOINTMENT
+    session.state = AgentState.TRIGGERED
+    return True
+
+
 # --- tool dispatch ----------------------------------------------------------
 
 
@@ -179,7 +268,7 @@ def _invoke_tool(
 ) -> Any:
     """Call the named AgentTools method, pulling session context as needed."""
     if tool == "re_extract":
-        return tools.re_extract(args.get("text"))
+        return tools.re_extract(args.get("text"), _reply_context(session))
     if tool == "check_inventory":
         return tools.check_inventory(args.get("vehicle") or session.vehicle_interest)
     if tool == "recommend_alternatives":

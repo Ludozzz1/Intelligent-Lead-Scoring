@@ -1,0 +1,16 @@
+{
+  "lead_id": "SHOW-WARM-HIGH-2",
+  "platform": "AutoXY",
+  "channel": "google",
+  "message": "Sono interessato alla Peugeot 3008, budget 40.000 euro. Vorrei ricevere un preventivo dettagliato.",
+  "vehicle_interest": "Peugeot 3008",
+  "city": "Bologna",
+  "zip_code": "40122",
+  "phone": "3291764530",
+  "name": "Elena",
+  "surname": "Conti",
+  "email": "elena.conti@outlook.it",
+  "campaign": "Search Brand",
+  "created_at": "2026-06-30T10:30:00",
+  "consent": true
+}
