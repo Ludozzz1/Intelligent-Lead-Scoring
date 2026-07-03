@@ -8,8 +8,7 @@ prenotazione test drive). Serve a dare agli operatori una **priorità di chiamat
 
 Due zone:
 
-- **Hot path** — deterministico, esito **≤ 2 min**, **una sola call LLM** (solo
-  estrazione): gate → estrazione → scoring lineare → categoria → motivazione → azione.
+- **Scorig** — deterministico, **una sola call LLM** di estrazione dal testo della lead: gate → estrazione → scoring lineare → categoria → motivazione → azione.
 - **Agente** — asincrono, fuori SLA: tool mockati e planner LLM.
 
 Flusso, variabili di scoring, calibrazione dei pesi e stima costi in
@@ -18,7 +17,6 @@ Flusso, variabili di scoring, calibrazione dei pesi e stima costi in
 ## Requisiti
 
 - Python ≥ 3.11.
-- Nessuna chiave necessaria: demo, CLI, API e test girano **offline** con mock deterministici.
 
 ## Setup
 
