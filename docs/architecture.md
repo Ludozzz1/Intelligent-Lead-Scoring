@@ -169,7 +169,7 @@ motivazione e CLI.
   attivo, sommano a 100). Ritorna `(weights, source)`.
 - `load_thresholds`: bande + cutoff di automazione da
   [config/category_thresholds.json](../config/category_thresholds.json)
-  (hot 72 / warm 45 / cold 25; `warm_high` 62; `recovery_coverage_min` 0.45).
+  (hot 72 / warm 45 / cold 25; `warm_high` 62).
 - `load_catchment`, `load_blocklists`: catchment geo e blocklist del gate.
 
 Tutti degradano a default built-in se un file manca/e illeggibile.
@@ -192,13 +192,12 @@ dall'LLM. Le soglie sono lette dall'artifact, mai hardcoded a intuito.
   `decide_action(...)` -> `ActionDecision(recommended_action, agent_goal, priority)`.
   Routing **allineato al valore + consenso** (`route_complete`, sorgente unica riusata
   anche dal re-scoring dell'agente): automazione ristretta ai lead ad alto valore
-  (`hot` e `warm >= warm_high`). `invalid` -> `scartare`; **incompleto** + consenso **e**
-  estrazione abbastanza ricca (`recovery_worthy`: `extraction_coverage >=
-  recovery_coverage_min`, non la banda depressa dai campi mancanti) -> `chiedere_info` +
-  goal `recover_info`; **completo** automation-worthy (`hot` o `warm` con `score >=
-  warm_high`) + consenso -> `lead_valido` + goal `negotiate_appointment` (booking
-  proattivo); **`cold`** (qualsiasi completezza), warm medio/basso, o senza consenso ->
-  operatore (i `cold` con label `nurturing` a bassa priorita, **mai** agente). Il
+  (`hot` e `warm >= warm_high`). `invalid` -> `scartare`. **Una sola regola** attiva
+  l'agente: consenso **e** `score >= warm_high` (gli `hot` sono sempre sopra). Se
+  mancano info -> `chiedere_info` + goal `recover_info` (recupera, ri-score e prenota,
+  §7.2); se completo -> `lead_valido` + goal `negotiate_appointment` (booking proattivo).
+  Warm medio/basso, `cold` (label `nurturing`) o senza consenso -> operatore, **mai**
+  agente. Il
   **consenso e valutato a monte** (niente trigger che collassa in handoff). `priority`
   (0-100) e la banda della categoria + boost in-banda da score e cliente di ritorno ->
   ordine della coda call center.
@@ -213,10 +212,14 @@ trigger, e il runner avanza una sessione persistita sugli eventi.
   **propone** la prossima azione (`PlannerDecision`). Due implementazioni dietro lo
   stesso protocollo: `DeterministicPlanner` (**default in `llm_mode=mock`**: traduce
   1:1 le traiettorie legacy, keyword matching, comportamento invariato) e `LLMPlanner`
-  (tool-calling reale via `LLMAdapter.complete_json`, **fuori SLA**; prompt/schema in
-  [agent_prompts.py](../src/agent/agent_prompts.py)). Su errore/timeout/output
-  invalido il loop **degrada** al deterministico (mai blocco). Invariante: **l'LLM
-  propone, il deterministico dispone**.
+  (**native tool-calling** OpenAI via `LLMAdapter.complete_tool_call` — campo `tools`
+  + `tool_choice="required"`, **fuori SLA**; tool-defs/prompt in
+  [agent_prompts.py](../src/agent/agent_prompts.py)). L'`LLMPlanner` **traduce** il
+  tool call nativo in un `PlannerDecision` (i 3 control tool `wait_for_user`/`complete`/
+  `handoff` coprono le azioni non-tool; l'FSM transition è derivata in codice). Su
+  errore/timeout/nessun tool call il loop **degrada** al deterministico (mai blocco).
+  `enforce()` resta il chokepoint invariato. Invariante: **l'LLM propone, il
+  deterministico dispone**.
 - **Loop controller** ([src/agent/state_machine.py](../src/agent/state_machine.py)):
   `advance(session, event, tools, settings, *, planner=None)` per ogni passo chiede al
   planner una decisione, la passa da `enforce()`, esegue il tool, registra audit e

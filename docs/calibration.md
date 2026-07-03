@@ -35,18 +35,14 @@ produce un artifact consumato dallo scorer.
 4. **Soglie.** Replay dei lead nello scorer coi pesi appresi, raggruppamento per
    fascia di score, calcolo del tasso di conversione per fascia, tagli hot/warm/cold
    dove il tasso scalina → `config/category_thresholds.json`. Oltre alle bande, il
-   file porta due **cutoff di automazione**, anch'essi naive/calibrabili:
-   - `warm_high` (default **62**): sopra questa soglia un `warm` completo è
-     *booking-worthy* (l'agente prova la prenotazione come per un `hot`). Si taratura
-     dove il tasso di conversione dei `warm` si avvicina a quello degli `hot`.
-   - `recovery_coverage_min` (default **0.45**): copertura minima dell'estrazione
-     (`extraction_coverage`, frazione ponderata dei segnali §5.3 estratti, stessi
-     pesi dello scorer) perché un lead **incompleto** meriti il recupero info via
-     agente (§7.1). Gate sulla **copertura**, non sulla banda — inaffidabile perché
-     depressa proprio dai campi mancanti. Si taratura sul lift di qualifica tra
-     incompleti recuperati vs non recuperati per fascia di copertura.
+   file porta un **cutoff di automazione**, anch'esso naive/calibrabile:
+   - `warm_high` (default **62**): l'**unica soglia di attivazione dell'agente**. Un
+     lead con consenso e `score ≥ warm_high` è preso in carico (recupero info se
+     incompleto e poi booking; booking diretto se completo); gli `hot` sono sempre
+     sopra. Si taratura dove il tasso di conversione dei `warm` si avvicina a quello
+     degli `hot`.
 
-   I default attuali (`hot=72, warm=45, cold=25, warm_high=62, recovery_coverage_min=0.45`)
+   I default attuali (`hot=72, warm=45, cold=25, warm_high=62`)
    sono **naive**: ancorati alla distribuzione di score dei lead mock (completi-hot ≥78,
    con gap netto), non ancora fittati sullo storico.
 5. **Backtest.** Su holdout: precision/recall di "hot", confronto **modello vs

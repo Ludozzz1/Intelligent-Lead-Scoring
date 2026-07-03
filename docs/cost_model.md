@@ -100,11 +100,11 @@ lead **non entra nella coda attiva**. Due fonti, allineate al valore + consenso
 - **invalid → `queue="scartato"`**: **fuori dalla coda di chiamata** (0 chiamate). Non
   più un consiglio "scartare" su un lead che resta in lista: è una **disposizione di
   sistema**, con motivazione conservata solo per audit/appello.
-- **auto-gestiti dall'agente → `queue="agente"`**: solo lead ad alto valore — `hot` e
-  `warm` al limite dell'hot (`score ≥ warm_high`) con consenso, chiusi con `BOOKED`
-  (booking staged + approvazione umana). Gli **incompleti** con estrazione ricca
-  (`recovery_worthy`) passano prima dal `recover_info`: l'arricchimento (re-scoring §7.2)
-  può promuoverli a booking-worthy. I **`cold` non entrano mai in automazione** (§7.1).
+- **auto-gestiti dall'agente → `queue="agente"`**: solo lead ad alto valore — consenso
+  e `score ≥ warm_high` (gli `hot` sono sempre sopra), chiusi con `BOOKED`
+  (booking staged + approvazione umana). Gli **incompleti** passano prima dal
+  `recover_info`: l'arricchimento (re-scoring §7.2) può promuoverli a booking-worthy.
+  Warm medio/basso e `cold` **non entrano mai in automazione**.
 - **tutto il resto → `queue="attiva"`**: senza consenso (l'agente non può messaggiare),
   warm medi/bassi, e i lead che l'agente **ri-emerge** dopo handoff / approvazione /
   nessuna risposta. Restano in coda **ma priorizzati**, con un `next_best_action`.

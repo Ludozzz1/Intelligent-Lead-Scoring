@@ -1,0 +1,52 @@
+{
+  "sample": {
+    "file": "leads_mock.json",
+    "leads": 26
+  },
+  "prices_eur_per_mtok": {
+    "gpt-5.4-mini": {
+      "input": 0.15,
+      "output": 0.6
+    },
+    "gpt-5.4": {
+      "input": 2.5,
+      "output": 10.0
+    }
+  },
+  "prices_are_placeholders": true,
+  "extraction": {
+    "calls": 22,
+    "prompt_tokens": 21390,
+    "completion_tokens": 2907,
+    "total_tokens": 24297,
+    "eur": 0.004953,
+    "ratio_leads_hitting_llm": 0.8462,
+    "avg_eur_per_call": 0.000225
+  },
+  "agent": {
+    "calls": 46,
+    "prompt_tokens": 74145,
+    "completion_tokens": 2293,
+    "total_tokens": 76438,
+    "eur": 0.179322,
+    "triggered_leads": 13,
+    "triggered_ratio": 0.5,
+    "avg_calls_per_session": 3.538,
+    "avg_eur_per_session": 0.013794
+  },
+  "scaling_daily": {
+    "leads": 10000,
+    "extraction_eur": 1.9,
+    "agent_eur": 68.97,
+    "llm_eur": 70.88,
+    "llm_eur_monthly": 2126.25
+  },
+  "savings_daily": {
+    "baseline_eur": 40000.0,
+    "avoided_ratio": 0.6923,
+    "avoided_calls": 6923.1,
+    "gross_savings_eur": 27692.31,
+    "net_savings_eur": 27621.43,
+    "roi_x": 390.7
+  }
+}
