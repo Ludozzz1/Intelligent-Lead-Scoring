@@ -9,7 +9,7 @@ prenotazione test drive). Serve a dare agli operatori una **priorità di chiamat
 Due zone:
 
 - **Scorig** — deterministico, **una sola call LLM** di estrazione dal testo della lead: gate → estrazione → scoring lineare → categoria → motivazione → azione.
-- **Agente** — asincrono, fuori SLA: tool mockati e planner LLM.
+- **Agente** — asincrono, fuori dal fluisso di scoring: tool mockati e planner LLM.
 
 Flusso, variabili di scoring, calibrazione dei pesi e stima costi in
 **[deliverables/](deliverables/)**.
