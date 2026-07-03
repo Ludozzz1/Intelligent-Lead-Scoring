@@ -12,7 +12,7 @@ Due zone:
 - **Agente** — asincrono, fuori dal fluisso di scoring: tool mockati e planner LLM.
 
 Flusso, variabili di scoring, calibrazione dei pesi e stima costi in
-**[deliverables/](docs/)**.
+**[docs/](docs/)**.
 
 ## Requisiti
 
